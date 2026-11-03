@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大埔區實時交通</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html,body,#map{width:100%;height:100%;margin:0;padding:0;}
+  body{background:#e8e8e8;font-family:'Microsoft JhengHei','Noto Sans TC','PingFang TC',sans-serif;}
+  #map{background:#e8e8e8;}
+  /* 交通圖層：黑底用 screen 混合 → 黑色變透明，交通色線保留 */
+  .traffic{ mix-blend-mode: screen; }
+  .title{position:absolute;z-index:1000;left:8px;top:8px;color:#222;font-size:14px;font-weight:bold;background:rgba(255,255,255,.88);padding:4px 9px;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+  .legend{position:absolute;z-index:1000;right:8px;top:8px;background:rgba(255,255,255,.92);color:#222;font-size:12px;padding:6px 9px;border-radius:4px;line-height:1.6;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+  .legend b{display:block;font-size:11px;margin-bottom:2px;color:#444;}
+  .legend .dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle;}
+  .tstamp{position:absolute;z-index:1000;left:8px;bottom:6px;color:#333;font-size:10px;background:rgba(255,255,255,.85);padding:2px 7px;border-radius:3px;box-shadow:0 1px 2px rgba(0,0,0,.15);}
+  .warn{position:absolute;z-index:1000;left:50%;top:50%;transform:translate(-50%,-50%);color:#c0392b;font-size:12px;background:rgba(255,255,255,.9);padding:6px 12px;border-radius:4px;display:none;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="title">大埔區 實時交通</div>
+<div class="legend">
+  <b>交通狀態</b>
+  <div><span class="dot" style="background:#e04545"></span>塞車</div>
+  <div><span class="dot" style="background:#f0a020"></span>緩慢</div>
+  <div><span class="dot" style="background:#3aa76d"></span>暢通</div>
+</div>
+<div class="tstamp" id="ts">載入中…</div>
+<div class="warn" id="warn">交通圖層暫不可用，已隱藏交通線</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function(){
+  var map = L.map('map',{zoomControl:false,attributionControl:false,minZoom:10,maxZoom:20})
+           .setView([22.4477,114.1686],14); // 大埔墟
+
+  var opts = {tileSize:256,maxZoom:20,minZoom:10};
+  // 淺色底圖（同 Google Maps 網頁版外觀）
+  var baseUrl = 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=zh-TW&gl=hk';
+  // 交通圖層（黑底圖，用 screen 混合令黑色變透明）
+  var trafficUrl = 'https://mt1.google.com/vt?lyrs=t@130&x={x}&y={y}&z={z}';
+  var osm = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+  var base = L.tileLayer(baseUrl, opts).addTo(map);
+  var traffic = L.tileLayer(trafficUrl, Object.assign({},opts,{className:'traffic'})).addTo(map);
+  var trafficDown = false, baseDown = false;
+
+  function fallbackBase(){
+    map.removeLayer(base);
+    base = L.tileLayer(osm, Object.assign({},opts,{subdomains:'abc'})).addTo(map);
+    map.removeLayer(traffic);
+    document.getElementById('warn').style.display = 'block';
+  }
+
+  map.on('tileerror', function(ev){
+    if(baseDown) return;
+    if(ev.tile && ev.tile.src.indexOf('lyrs=t') !== -1){
+      if(!trafficDown){ trafficDown = true; map.removeLayer(traffic); document.getElementById('warn').style.display='block'; }
+    } else {
+      baseDown = true; fallbackBase();
+    }
+  });
+
+  function stamp(){
+    var d = new Date();
+    var hh = ('0'+d.getHours()).slice(-2), mm=('0'+d.getMinutes()).slice(-2), ss=('0'+d.getSeconds()).slice(-2);
+    document.getElementById('ts').textContent = '更新 ' + hh+':'+mm+':'+ss + ' HKT';
+  }
+  stamp();
+
+  // 每 60 秒重新載入交通圖層（cache-busting），保持實時
+  setInterval(function(){
+    if(baseDown) return;
+    if(!trafficDown){
+      map.removeLayer(traffic);
+      traffic = L.tileLayer(trafficUrl + '&cb=' + Date.now(), Object.assign({},opts,{className:'traffic'})).addTo(map);
+    }
+    stamp();
+  }, 60000);
+})();
+</script>
+</body>
+</html>
